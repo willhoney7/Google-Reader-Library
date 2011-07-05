@@ -14,6 +14,7 @@ reader = {
 	TOKEN_SUFFIX: "token",
 	SUBSCRIPTIONS_SUFFIX: "subscription/list",
 	ALLITEMS_SUFFIX: "stream/contents/user/-/state/com.google/reading-list",
+	STREAM_SUFFIX: "stream/contents/",
 
 	//other constants
 	FEED_ALL_ID: "_all",
@@ -173,6 +174,27 @@ reader = {
 				console.error(transport);
 			}
 		});
+	},
+	getItems: function(feedUrl, successCallback){
+		reader.makeRequest({
+			method: "GET",
+			url: reader.BASE_URL + reader.STREAM_SUFFIX + feedUrl,
+			parameters: {
+				//ot: new Date().getTime(), //ot=[unix timestamp] : The time from which you want to retrieve items. Only items that have been crawled by Google Reader after this time will be returned.
+				r: "d",						//r=[d|n|o] : Sort order of item results. d or n gives items in descending date order, o in ascending order.
+				//xt: "",					//xt=[exclude target] : Used to exclude certain items from the feed. For example, using xt=user/-/state/com.google/read will exclude items that the current user has marked as read, or xt=feed/[feedurl] will exclude items from a particular feed (obviously not useful in this request, but xt appears in other listing requests).
+				ck: new Date().getTime(), 	//Use the current Unix time here, helps Google with caching.
+				client: "Tibfib"			//You can use the default Google client (scroll), but it doesn't seem to make a difference. Google probably uses this field to gather data on who is accessing the API, so I'd advise using your own unique string to identify your software.
+			},
+			onSuccess: function(transport){
+				console.log(transport);
+				successCallback(JSON.parse(transport.responseText).items);
+			}, 
+			onFailure: function(transport){
+				console.error(transport);
+			}
+		});
+
 	},
 
 	normalizeError: function(inErrorResponse){
