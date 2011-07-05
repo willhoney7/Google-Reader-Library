@@ -5,10 +5,18 @@
 
 reader = {
 	/*constants*/
+
+	//urls
 	LOGIN_URL: "https://www.google.com/accounts/ClientLogin",
 	BASE_URL: "http://www.google.com/reader/api/0/",
+
+	//url suffixes
 	TOKEN_SUFFIX: "token",
 	SUBSCRIPTIONS_SUFFIX: "subscription/list",
+	ALLITEMS_SUFFIX: "stream/contents/user/-/state/com.google/reading-list",
+
+	//other constants
+	FEED_ALL_ID: "_all",
 
 
 	/*variables*/
@@ -148,6 +156,23 @@ reader = {
 				console.error(transport);
 			}
 		})
+	},
+
+	getAllItems: function(successCallback){
+		reader.makeRequest({
+			method: "GET",
+			url: reader.BASE_URL + reader.ALLITEMS_SUFFIX,
+			parameters: {
+				ck: new Date().getTime()			
+			},
+			onSuccess: function(transport){
+				console.log(transport);
+				successCallback(JSON.parse(transport.responseText).items);
+			},
+			onFailure: function(transport){
+				console.error(transport);
+			}
+		});
 	},
 
 	normalizeError: function(inErrorResponse){
