@@ -256,7 +256,7 @@ reader = {
 	//organizes feeds based on categories/labels.
 	organizeFeeds: function(subscriptions){
 		var categories = [
-			{title: "All", id: reader.ALLITEMS_SUFFIX, feeds: subscriptions, isLabel: true}
+			{title: "All", id: reader.ALLITEMS_SUFFIX, feeds: subscriptions, isLabel: true, isAll: true}
 		],
 		uncategorized = [];
 
