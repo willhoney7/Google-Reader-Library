@@ -57,7 +57,9 @@ reader = {
 
 	_Auth: "",
 	getAuth: function(){
-		return reader._Auth;	
+		if(reader._Auth !== "undefined"){
+			return reader._Auth;		
+		}
 	},
 	setAuth: function(auth){
 		reader._Auth = auth;	
@@ -152,7 +154,7 @@ reader = {
 		reader.is_logged_in = false;
 		
 		//check storage for the tokens we need.
-		if(localStorage.Auth){
+		if(localStorage.Auth && localStorage.Auth !== "undefined"){
 			reader.setAuth(localStorage.Auth);
 			reader.is_logged_in = true;
 		} 
@@ -172,6 +174,7 @@ reader = {
 			},
 			onSuccess: function(transport){
 				localStorage.Auth = _(transport.responseText).lines()[2].replace("Auth=", "");
+				reader.load();
 
 				reader.getUserInfo(successCallback);
 	
@@ -182,20 +185,23 @@ reader = {
 			}
 		});
 	},
-	getUserInfo: function(successCallback){
+	getUserInfo: function(successCallback, failCallback){
 		reader.makeRequest({
 			method: "GET",
 			url: reader.BASE_URL + reader.USERINFO_SUFFIX,
 			parameters: {},
 			onSuccess: function(transport){
-				localStorage.User = JSON.parse(transport.responseText);
+				localStorage.User = transport.responseText;
 
 				reader.load();
 				successCallback();						
 			},
 			onFailure: function(transport){
 				console.error(transport);
-				failCallback(reader.normalizeError(transport.responseText));
+				if(failCallback){
+					failCallback(reader.normalizeError(transport.responseText));
+					
+				}
 			}
 		});			
 
