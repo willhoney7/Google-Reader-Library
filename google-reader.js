@@ -13,14 +13,13 @@ reader = {
 
 	STREAM_PATH: "stream/contents/",
 
-	//url suffixes
-	TOKEN_SUFFIX: "token",
-
 	SUBSCRIPTIONS_PATH: "subscription/",
 	SUBSCRIPTIONS_LIST: "list",
 	SUBSCRIPTIONS_EDIT: "edit",
 	SUBSCRIPTIONS_MARKALLREAD: "mark-all-as-read",
 
+	//url suffixes
+	TOKEN_SUFFIX: "token",
 
 	USERINFO_SUFFIX: "user-info",
 	UNREAD_SUFFIX: "unread-count",
@@ -28,17 +27,16 @@ reader = {
 	LABEL_RENAME: "rename-tag",
 	LABEL_PATH: "user/-/label/",
 
-	ALLITEMS_SUFFIX: "user/-/state/com.google/reading-list",
-
-	
 	EDITTAG_SUFFIX: "edit-tag",
 	TAGS: {
 		"like": "user/-/state/com.google/like",
 		"label": "user/-/label/",
 		"star": "user/-/state/com.google/starred",
 		"read": "user/-/state/com.google/read",
+		"fresh": "user/-/state/com.google/fresh",
 		"share": "user/-/state/com.google/broadcast",
-		"keep-unread": "user/-/state/com.google/tracking-kept-unread"	
+		"keep-unread": "user/-/state/com.google/tracking-kept-unread",
+		"reading-list": "user/-/state/com.google/reading-list",	
 	},
 
 
@@ -53,6 +51,16 @@ reader = {
 	},
 	getFeeds: function(){
 		return this._feeds;	
+	},
+	getLabels: function(){
+		return _.select(reader.getFeeds(), function(feed){ return feed.isLabel;	});
+	},
+
+	setUser: function(user){
+		localStorage["User"] = JSON.stringify(user);
+	},
+	getUser: function(){
+		return JSON.parse(localStorage["User"]);
 	},
 
 	_Auth: "",
@@ -125,10 +133,13 @@ reader = {
 				}
 			} else if(request.readyState === 4){
 				if(obj.method === "POST"){
-					//If it failed and this is a post request, try getting a new token, then do the request again
-					reader.getToken(function(){
-						reader.makeRequest(obj);
-					}, obj.onFailure);
+					if(!obj.tried){
+						//If it failed and this is a post request, try getting a new token, then do the request again
+						reader.getToken(function(){
+							obj.tried = true;
+							reader.makeRequest(obj);
+						}, obj.onFailure);
+					}
 				} else {
 					if(obj.onFailure){
 						obj.onFailure(request);
@@ -185,13 +196,19 @@ reader = {
 			}
 		});
 	},
+	logout: function(){
+		localStorage["Auth"] = undefined;
+		reader.setUser({});
+		reader.setAuth("");
+		reader.setFeeds([]);
+	},
 	getUserInfo: function(successCallback, failCallback){
 		reader.makeRequest({
 			method: "GET",
 			url: reader.BASE_URL + reader.USERINFO_SUFFIX,
 			parameters: {},
 			onSuccess: function(transport){
-				localStorage.User = transport.responseText;
+				reader.setUser(JSON.parse(transport.responseText));
 
 				reader.load();
 				successCallback();						
@@ -239,7 +256,6 @@ reader = {
 			method: "GET",
 			url: reader.BASE_URL + reader.SUBSCRIPTIONS_PATH + reader.SUBSCRIPTIONS_LIST,
 			onSuccess: function(transport){
-
 				//save feeds in an organized state.
 				reader.setFeeds(reader.organizeFeeds(JSON.parse(transport.responseText).subscriptions));
 				
@@ -261,10 +277,13 @@ reader = {
 
 	//organizes feeds based on categories/labels.
 	organizeFeeds: function(subscriptions){
-		var categories = [
-			{title: "All", id: reader.ALLITEMS_SUFFIX, feeds: subscriptions, isLabel: true, isAll: true}
-		],
-		uncategorized = [];
+		var categories = [],
+			specialCategories = [
+				{title: "All", id: reader.TAGS["reading-list"], feeds: subscriptions, isAll: true, isSpecial: true},
+				{title: "Starred", id: reader.TAGS["star"], isSpecial: true},
+				{title: "Shared", id: reader.TAGS["share"], isSpecial: true}
+			],
+			uncategorized = [];
 
 		for(var i = 0; i < subscriptions.length; i++){
 			subscriptions[i].isFeed = true;
@@ -273,10 +292,13 @@ reader = {
 				uncategorized.push(subscriptions[i]);
 			} else {
 				_.each(subscriptions[i].categories, function(category){
+					var subscription = _.clone(subscriptions[i]);
+						subscription.inside = category.id;
+					
 					var new_category = _.clone(category);
 						new_category.isLabel = true;
 						new_category.title = new_category.label;
-						new_category.feeds = [subscriptions[i]];
+						new_category.feeds = [subscription];
 
 					categories.push(new_category);
 				});
@@ -297,24 +319,21 @@ reader = {
 				}
 			}
 		}
+		categories = _.sortBy(categories, function(category){
+			return category.title;
+		});
 		_.each(categories, function(category){
-			_.sortBy(category.feeds, function(feed){
-				return feed.sortid;
+			category.feeds = _.sortBy(category.feeds, function(feed){
+				return feed.title;
 			});
 		});
 
-		return categories.concat(uncategorized);
+		return [].concat(specialCategories, categories, uncategorized);
 	},
 
 	//returns url for image to use in the icon
 	getIconForFeed: function(feedUrl){
-		if(feedUrl === reader.ALLITEMS_SUFFIX){
-			return "source/images/small_folder.png";
-		} else if(_(feedUrl).includes("/label/")){
-			return "source/images/small_folder.png";
-		} else {
-			return "http://www.google.com/s2/favicons?domain_url=" + decodeURI(feedUrl);
-		}
+		return "http://www.google.com/s2/favicons?domain_url=" + encodeURIComponent(feedUrl);
 	},
 
 	//get unread counts from google reader
@@ -332,7 +351,7 @@ reader = {
 	},
 	decrementUnreadCount: function(feedId, callback){
 		_.each(reader.getFeeds(), function(subscription){
-			if(subscription.id === feedId || (subscription.id === reader.ALLITEMS_SUFFIX)){
+			if(subscription.id === feedId || (subscription.isAll)){
 				subscription.count--;
 			} else if(subscription.feeds && subscription.feeds.length > 0){
 				_.each(subscription.feeds, function(feed){
@@ -347,13 +366,18 @@ reader = {
 
 	//integrate unread counts to our feeds array
 	setFeedUnreadCounts: function(unreadCounts){
-		//do stuff
 		_.each(reader.getFeeds(), function(subscription){
 			for(var i = 0; i < unreadCounts.length; i++){
-				if(subscription.id === unreadCounts[i].id || (subscription.id === reader.ALLITEMS_SUFFIX && _(unreadCounts[i].id).includes("state/com.google/reading-list"))){
+				if(subscription.id === unreadCounts[i].id || (subscription.isAll && _(unreadCounts[i].id).includes("state/com.google/reading-list"))){
 					subscription.count = unreadCounts[i].count;
 					subscription.newestItemTimestamp = unreadCounts[i].newestItemTimestampUsec;	
 				}
+				_.each(subscription.feeds, function(feed){
+					if(feed.id === unreadCounts[i].id){
+						feed.count = unreadCounts[i].count;
+						feed.newestItemTimestamp = unreadCounts[i].newestItemTimestampUsec;	
+					}
+				});
 			}
 		});
 	},
@@ -391,6 +415,20 @@ reader = {
 			s: feed
 		}, successCallback);
 	},
+
+	editFeedLabel: function(feed, label, opt, successCallback){
+		var obj = {
+			ac: "edit",
+			s: feed
+		}
+		if(opt){
+			obj.a = label;
+		} else {
+			obj.r = label;
+		}
+		reader.editFeed(obj, successCallback);
+	},
+
 
 	unsubscribeFeed: function(feed, successCallback){
 		reader.editFeed({
@@ -460,6 +498,8 @@ reader = {
 			url += "load";
 		} else {
 			url += "find";
+			input = input.replace(/\.\w{1,3}\.*\w{0,2}$/ig, "");
+			console.log("replaced input", input);
 		}
 		reader.makeRequest({
 			url: url,
@@ -500,7 +540,7 @@ reader = {
 			
 		reader.makeRequest({
 			method: "GET",
-			url: reader.BASE_URL + reader.STREAM_PATH + feedUrl,
+			url: reader.BASE_URL + reader.STREAM_PATH + encodeURIComponent(feedUrl),
 			parameters: params, /*{
 				//ot: new Date().getTime(), //ot=[unix timestamp] : The time from which you want to retrieve items. Only items that have been crawled by Google Reader after this time will be returned.
 				r: "d",						//r=[d|n|o] : Sort order of item results. d or n gives items in descending date order, o in ascending order.
@@ -525,7 +565,7 @@ reader = {
 		//feed id
 		//item id
 		//tag in simple form: "like", "read", "share", "label", "star", "keep-unread"
-		//opt is true to add, false to remove
+		//add === true, or add === false
 
 		var params = {
 			s: feed,
