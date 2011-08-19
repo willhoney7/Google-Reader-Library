@@ -1,6 +1,10 @@
 /*
+	This library was developed by Will Honey.
+	It is licensed under the GPLv3 Open Source License
+
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
+	This library required the support of localStorage. Updates could be easily made to change that
 */
 
 reader = {
