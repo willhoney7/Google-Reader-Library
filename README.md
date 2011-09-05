@@ -1,4 +1,3 @@
-
 ## Javascript Google Reader Library  ##
 
 Here is an unofficial JS Google Reader Library. Licensed GPLv3. 

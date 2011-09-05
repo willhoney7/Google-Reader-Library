@@ -4,7 +4,7 @@
 
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
-	This library requires the support of localStorage. Updates could be easily made to change that
+	This library requires the support of localStorage. Updates could be easily made to change that.
 */
 
 /* jslint adsafe: false, devel: true, regexp: true, browser: true, vars: true, nomen: true, maxerr: 50, indent: 4 */
@@ -169,6 +169,12 @@
 							}
 						}
 					}
+					if(request.status === 401 && request.statusText === "Unauthorized"){
+						//Humane is a notification lib. 
+						if(humane){
+							humane(request.statusText + ". " + "Try logging in again.");
+						}
+					}
 
 					console.error(request);
 				}
@@ -194,7 +200,6 @@
 			reader.is_logged_in = true;
 		} 
 		return (reader.is_logged_in);
-
 	};
 
 	reader.login = function (email, password, successCallback, failCallback) {
@@ -636,10 +641,10 @@
 		}, successCallback);
 	};
 
-	var urlRegex = /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?\^=%&amp;:\/~\+#]*[\w\-\@?\^=%&amp;\/~\+#])?/;
+	var readerUrlRegex = /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?\^=%&amp;:\/~\+#]*[\w\-\@?\^=%&amp;\/~\+#])?/;
 	reader.processFeedInput = function (input, inputType, successCallback, failCallback) {
 		var url = "https://ajax.googleapis.com/ajax/services/feed/";
-		if ((reader.urlRegex.test(input) || inputType === "url") && inputType !== "keyword") {
+		if ((readerUrlRegex.test(input) || inputType === "url") && inputType !== "keyword") {
 			url += "load";
 		} else {
 			url += "find";
