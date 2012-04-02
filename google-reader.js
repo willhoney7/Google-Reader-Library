@@ -1,10 +1,18 @@
 /*
-	This library was developed by Will Honey.
-	It is licensed under the GPLv3 Open Source License
+	Copyright (C) 2012 Will Honey
 
+	Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+*/
+
+/*
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
-	This library requires the support of localStorage. Updates could be easily made to change that.
+	This library requires the support of localStorage however updates could be easily made to change that.
 */
 
 /* jslint adsafe: false, devel: true, regexp: true, browser: true, vars: true, nomen: true, maxerr: 50, indent: 4 */
@@ -64,27 +72,11 @@
 		return _(reader.getFeeds()).select(function (feed) { return feed.isLabel; });
 	};
 
-	//managing the logged in user
-	reader.setUser =  function (user) {
-		localStorage.User = JSON.stringify(user);
-	};
-	reader.getUser = function () {
-		return JSON.parse(localStorage.User);
-	};
-
-	//managing the app authentication
-	var readerAuth = "",
-		readerToken = "";
-	reader.getAuth = function () {
-		if (readerAuth !== "undefined") {
-			return readerAuth;		
-		}
-	};
-	reader.setAuth = function (auth) {
-		readerAuth = auth;	
-	};
+	reader.user = new localStorageWrapper("User", "obj");
+	reader.auth = new localStorageWrapper("Auth", "string");
 
 	//the core ajax function
+	var readerToken = "";
 	var requests = [],
 		makeRequest = function (obj, noAuth) {
 			//make sure we have a method
@@ -135,9 +127,9 @@
 			//set request header
 			request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 
-			if (reader.getAuth() && !noAuth) {
+			if (reader.auth.get() && !noAuth) {
 				//this one is important. This is how google does authorization.
-				request.setRequestHeader("Authorization", "GoogleLogin auth=" + reader.getAuth());
+				request.setRequestHeader("Authorization", "GoogleLogin auth=" + reader.auth.get());
 			}
 
 			var requestIndex = requests.length;
@@ -194,11 +186,13 @@
 		reader.is_logged_in = false;
 		reader.is_initialized = true;
 		
+		if(reader.auth.get()){
+			reader.is_logged_in = true;			
+		}
 		//check storage for the tokens we need.
-		if (localStorage.Auth && localStorage.Auth !== "undefined") {
+		/*if (localStorage.Auth && localStorage.Auth !== "undefined") {
 			reader.setAuth(localStorage.Auth);
-			reader.is_logged_in = true;
-		} 
+		} */
 		return (reader.is_logged_in);
 	};
 
@@ -218,7 +212,7 @@
 				
 				reader.load();
 
-				getUserInfo(successCallback);
+				reader.getUserInfo(successCallback);
 	
 			},
 			onFailure: function (transport) {
@@ -230,19 +224,25 @@
 
 	reader.logout = function () {
 		reader.is_logged_in = false;
-		localStorage.Auth = undefined;
-		reader.setUser({});
-		reader.setAuth("");
+		
+		//delete localStorage.Auth;
+		reader.auth.del();
+		reader.user.del();
+
+		//delete localStorage.User;
+		//reader.setUser({});
+
 		reader.setFeeds([]);
 	};
 
-	var getUserInfo = function (successCallback, failCallback) {
+	reader.getUserInfo = function (successCallback, failCallback) {
 		makeRequest({
 			method: "GET",
 			url: BASE_URL + USERINFO_SUFFIX,
 			parameters: {},
 			onSuccess: function (transport) {
-				reader.setUser(JSON.parse(transport.responseText));
+				reader.user.set(JSON.parse(transport.responseText));
+				//reader.setUser(JSON.parse(transport.responseText));
 
 				successCallback();
 			},
