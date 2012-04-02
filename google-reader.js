@@ -12,7 +12,7 @@
 /*
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
-	This library requires the support of localStorage however updates could be easily made to change that.
+	This library requires the support of a localStorage Wrapper I made, however updates could be easily made to change that.
 */
 
 /* jslint adsafe: false, devel: true, regexp: true, browser: true, vars: true, nomen: true, maxerr: 50, indent: 4 */
@@ -72,8 +72,8 @@
 		return _(reader.getFeeds()).select(function (feed) { return feed.isLabel; });
 	};
 
-	reader.user = new localStorageWrapper("User", "obj");
-	reader.auth = new localStorageWrapper("Auth", "string");
+	reader.user = new localStorageWrapper("User");
+	reader.auth = new localStorageWrapper("Auth");
 
 	//the core ajax function
 	var readerToken = "";

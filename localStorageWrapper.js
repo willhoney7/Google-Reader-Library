@@ -9,25 +9,36 @@
 
 
 
-	A simple localStorage Wrapper.
+	A simple localStorage Wrapper. Supports objects and strings. Care should be taken for extreme cases.
+
+	Usage:
+		var localStorageData = new localStorageWrapper("name");
+			localStorageData.set(data);
+			localStorageData.get() --> data;
+			localStorageData.del() --> removal from localStorage;
 */
 
-function localStorageWrapper (key, type) {
+function localStorageWrapper (key) {
 	this.key = key;
-	this.type = type || "string";
 }
 localStorageWrapper.prototype.get = function () {
-	if (localStorage[this.key] === "undefined") {
-		this.del();
-		return;
-	}
 	if (!localStorage[this.key]) {
 		return;
 	}
-	return (this.type === "obj" ? JSON.parse(localStorage[this.key]) : localStorage[this.key]);
+
+	try {
+		return JSON.parse(localStorage[this.key]);
+	} catch(e) {
+		 return localStorage[this.key];
+	}
+
 }
 localStorageWrapper.prototype.set = function (value) {
-	localStorage[this.key] = this.type === "obj" ? JSON.stringify(value) : value;
+	try {
+		localStorage[this.key] = (typeof value === "string") ? value : JSON.stringify(value);
+	} catch (e){
+		console.error("Error Saving to localStorage");
+	}
 },
 localStorageWrapper.prototype.del = function () {
 	delete localStorage[this.key];
