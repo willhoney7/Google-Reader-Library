@@ -7,9 +7,9 @@
 
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-*/
 
-/*
+
+
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
 	This library requires the support of a localStorage Wrapper I made, however updates could be easily made to change that.
@@ -162,9 +162,9 @@
 							}
 						}
 					}
-					if(request.status === 401 && request.statusText === "Unauthorized"){
+					if (request.status === 401 && request.statusText === "Unauthorized") {
 						//Humane is a notification lib. 
-						if(humane){
+						if (humane) {
 							humane(request.statusText + ". " + "Try logging in again.");
 						}
 					}
@@ -183,12 +183,12 @@
 	// *
 	// *************************************
 
-	//returns whether you are logged in.
+	//returns whether you have the auth header (ie are logged in)
 	reader.load = function () {
 		reader.is_logged_in = false;
 		reader.is_initialized = true;
 		
-		if(reader.auth.get()){
+		if (reader.auth.get()) {
 			reader.is_logged_in = true;			
 		}
 		//check storage for the tokens we need.
@@ -198,7 +198,7 @@
 		return (reader.is_logged_in);
 	};
 
-	//login with the user's provided info.
+	//if no auth header...login with the user's provided info.
 	//this saves our auth header to localStorage. This can be reused across sessions.
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
@@ -227,7 +227,8 @@
 		});
 	};
 
-	//Every session you need to request this token. If it fails, your auth header has expired and you need to have the user login again.
+	//Every session you need to request this token after you have the auth header
+	//If it fails, your auth header has expired and you need to have the user login again.
 	reader.getToken = function (successCallback, failCallback) {
 		makeRequest({
 			method: "GET",
