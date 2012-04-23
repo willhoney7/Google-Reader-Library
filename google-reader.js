@@ -13,6 +13,14 @@
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
 	This library requires the support of a localStorage Wrapper I made, however updates could be easily made to change that.
+
+	On Terminology: the API is a little confusing on what it calls things so I made it simple for myself and have set these definitions.
+		SUBSCRIPTION - either a label or a feed subscription
+		FEED - an individual site's rss feed
+		LABEL - a folder/label/category that contains feeds.
+		TAGS - the states applied to individual items (read, starred, etc.)
+		ITEM - an individual article
+
 */
 
 /* jslint adsafe: false, devel: true, regexp: true, browser: true, vars: true, nomen: true, maxerr: 50, indent: 4 */
@@ -40,7 +48,7 @@
 	reader.has_loaded_prefs = false;
 
 	//constants that will only be used in this file 
-	var CLIENT = "Tibfib",
+	var CLIENT = "Tibfib", //put your own string here
 		//base urls
 		LOGIN_URL = "https://www.google.com/accounts/ClientLogin", 
 		BASE_URL = "http://www.google.com/reader/api/0/",
@@ -75,18 +83,13 @@
 	reader.user = new localStorageWrapper("User");
 	reader.auth = new localStorageWrapper("Auth");
 
-	//the core ajax function
-	var readerToken = "";
-	var requests = [],
+	//the core ajax function, you won't need to use this directly
+	var readerToken = "",
+		requests = [],
 		makeRequest = function (obj, noAuth) {
-			//make sure we have a method
-			if (!obj.method) {
-				obj.method = "GET";
-			}
-			//make sure we have a parameters object
-			if (!obj.parameters) {
-				obj.parameters = {};
-			}
+			//make sure we have a method and a parameters object
+			obj.method = obj.method || "GET";
+			obj.parameters = obj.parameters || {};
 
 			//add the necessary parameters to get our requests to function properly
 			if (obj.method === "GET") {
@@ -98,11 +101,9 @@
 			}
 
 			//if we have a token, add it to the parameters
-			if (readerToken) {
-				if (obj.method === "POST") {
-					//it seems that "GET" requests don't care about your token
-					obj.parameters.T = readerToken;			
-				}
+			if (readerToken && obj.method === "POST") {
+				//it seems that "GET" requests don't care about your token
+				obj.parameters.T = readerToken;			
 			}
 			
 			//turn our parameters object into a query string
@@ -182,6 +183,7 @@
 	// *
 	// *************************************
 
+	//returns the whether you are logged in.
 	reader.load = function () {
 		reader.is_logged_in = false;
 		reader.is_initialized = true;
@@ -196,6 +198,7 @@
 		return (reader.is_logged_in);
 	};
 
+	//login with the user's provided info
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
 			failCallback("Blank Info...");
@@ -222,6 +225,7 @@
 		});
 	};
 
+	//logout the user
 	reader.logout = function () {
 		reader.is_logged_in = false;
 		
@@ -235,6 +239,7 @@
 		reader.setFeeds([]);
 	};
 
+	//get the user info, an object of data
 	reader.getUserInfo = function (successCallback, failCallback) {
 		makeRequest({
 			method: "GET",
@@ -304,7 +309,7 @@
 	// *
 	// *************************************
 
-	//Get the user's subscribed feeds
+	//Get the user's subscribed feeds, organizes them in a nice little array.
 	reader.loadFeeds = function (successCallback) {
 		function loadFeeds() {
 			makeRequest({
@@ -313,7 +318,7 @@
 				onSuccess: function (transport) {
 					//save feeds in an organized state.
 
-					loadTags(function (tags) {
+					loadLabels(function (labels) {
 						//get unread counts
 						reader.getUnreadCounts(function (unreadcounts) {
 
@@ -321,7 +326,7 @@
 							reader.setFeeds(
 								organizeFeeds(
 									JSON.parse(transport.responseText).subscriptions, 
-									tags, 
+									labels, 
 									unreadcounts,
 									reader.userPrefs
 								)
@@ -346,7 +351,7 @@
 		}
 	};
 
-	var loadTags = function (successCallback) {
+	var loadLabels = function (successCallback) {
 		makeRequest({
 			method: "GET",
 			url: BASE_URL + TAGS_PATH + LIST_SUFFIX,
@@ -361,79 +366,75 @@
 	
 	};
 
-	//organizes feeds based on categories/labels.
-	//this function is ridiculous. like really, holy crap.
-	var organizeFeeds = function (subscriptions, tags, unreadCounts, userPrefs) {
-		var uncategorized = [];
+	//organizes feeds based on labels.
+	var organizeFeeds = function (feeds, labels, unreadCounts, userPrefs) {
+		var unlabeled = [];
 
-		//prepare tags
-		tags.unshift({title: "All", id: reader.TAGS["reading-list"], feeds: subscriptions, isAll: true, isSpecial: true});
-		tags.pop(); //remove "user/-/state/com.blogger/blogger-following". not exactly future friendly *shrug*
+		//prepare labels
+		labels.unshift({title: "All", id: reader.TAGS["reading-list"], feeds: feeds, isAll: true, isSpecial: true});
+		labels.pop(); //remove "user/-/state/com.blogger/blogger-following". not exactly future friendly *shrug*
 		
-		var tagTitleRegExp = /[^\/]+$/i;
-		_(tags).each(function (tag) {
-		
-			//give tags a .title
-			if (!tag.title) {
-				tag.title = tagTitleRegExp.exec(tag.id)[0];	
-			}
+		var labelTitleRegExp = /[^\/]+$/i;
+		_(labels).each(function (label) {
+			
+			label.title = label.title || labelTitleRegExp.exec(label.id)[0];
 
 			//based on title add unique properties
-			if (tag.title === "starred") {
-				tag.title = _(tag.title).capitalize();
-				tag.isSpecial = true;
-			} else if (tag.title === "broadcast") {
-				tag.title = "Shared";
-				tag.isSpecial = true;
-			} else if (!tag.isSpecial) {
-				tag.isLabel = true;
+			if (label.title === "starred") {
+				label.title = _(label.title).capitalize();
+				label.isSpecial = true;
+			} else if (label.title === "broadcast") {
+				label.title = "Shared";
+				label.isSpecial = true;
+			} else if (!label.isSpecial) {
+				label.isLabel = true;
 			}
 
-			tag.feeds = [];
+			label.feeds = [];
 		
 			//remove digits from the id
-			tag.id = reader.correctId(tag.id);
+			label.id = reader.correctId(label.id);
 
 			//apply unreadCounts
 			_(unreadCounts).each(function (unreadCount) {
 				unreadCount.id = reader.correctId(unreadCount.id);
 
-				if (tag.id === unreadCount.id) {
-					tag.count = unreadCount.count;
-					tag.newestItemTimestamp = unreadCount.newestItemTimestampUsec;	
+				if (label.id === unreadCount.id) {
+					label.count = unreadCount.count;
+					label.newestItemTimestamp = unreadCount.newestItemTimestampUsec;	
 				}
 			});
 		});
 
-		//process subscriptions
-		_(subscriptions).each(function (sub) {
+		//process feeds
+		_(feeds).each(function (feed) {
 			//give isFeed property, useful for identifying
-			sub.isFeed = true;
+			feed.isFeed = true;
 
 			//replace digits from the id
-			sub.id = reader.correctId(sub.id);
+			feed.id = reader.correctId(feed.id);
 
 			//apply unread counts
 			_(unreadCounts).each(function (unreadCount) {
-				if (sub.id === unreadCount.id) {
-					sub.count = unreadCount.count;
-					sub.newestItemTimestamp = unreadCount.newestItemTimestampUsec;	
+				if (feed.id === unreadCount.id) {
+					feed.count = unreadCount.count;
+					feed.newestItemTimestamp = unreadCount.newestItemTimestampUsec;	
 				}
 			});
 
-			if (sub.categories.length === 0) {
-				//if the subscription has no categories, push it onto the uncategorized array
-				uncategorized.push(sub);
+			if (feed.categories.length === 0) {
+				//if the feed has no labels, push it onto the unlabeled array
+				unlabeled.push(feed);
 			} else {
-				//otherwise find the category from the tags array and push the sub into its feeds array
-				_(sub.categories).each(function (tag) {
-					tag.id = reader.correctId(tag.id);
-					_(tags).each(function (fullTag) {
-						if (tag.id === fullTag.id) {
-							var sub_clone = _(sub).clone();
-								sub_clone.inside = fullTag.id;
+				//otherwise find the label from the labels array and push the feed into its feeds array
+				_(feed.categories).each(function (label) {
+					label.id = reader.correctId(label.id);
+					_(labels).each(function (fullLabel) {
+						if (label.id === fullLabel.id) {
+							var feed_clone = _(feed).clone();
+								feed_clone.inside = fullLabel.id;
 
-							fullTag.feeds.push(sub_clone);
+							fullLabel.feeds.push(feed_clone);
 						}
 					});
 				});
@@ -448,19 +449,19 @@
 			}
 		});
 
-		//remove tags with no feeds
-		var tagsWithFeeds = _(tags).reject(function (tag) {
-			return (tag.feeds.length === 0 && !tag.isSpecial);
+		//remove labels with no feeds
+		var labelsWithFeeds = _(labels).reject(function (label) {
+			return (label.feeds.length === 0 && !label.isSpecial);
 		});
 
-		//order the feeds within tags
-		_(tagsWithFeeds).each(function (tag) {
+		//order the feeds within labels
+		_(labelsWithFeeds).each(function (label) {
 			//get the ordering id based on the userPrefs
-			var orderingId = _(userPrefs[tag.id]).detect(function (setting) {
+			var orderingId = _(userPrefs[label.id]).detect(function (setting) {
 				return (setting.id === "subscription-ordering");
 			});
 			if (orderingId) {
-				tag.feeds = _(tag.feeds).sortBy(function (feed) {
+				label.feeds = _(label.feeds).sortBy(function (feed) {
 					if (orderingId.value.indexOf(feed.sortid) === -1) {
 						//if our sortid isn't there, the feed should be at the back.
 						return 1000;
@@ -470,33 +471,33 @@
 				});	
 			}	//there might be another setting we should follow like "alphabetical" or "most recent". Just a guess. 
 			/*else {
-				tag.feeds.sort();
+				labels.feeds.sort();
 			}*/
 			
 		});
 
-		//now order ALL feeds and tags
+		//now order ALL feeds and labels
 		var orderingId = _(userPrefs["user/-/state/com.google/root"]).detect(function (setting) {
 			return (setting.id === "subscription-ordering");
 		}) || {value: ""};
 		
 
-		//our feeds are our tagsWithFeeds + our uncategorized subscriptions
-		var feeds = [].concat(tagsWithFeeds, uncategorized);
+		//our subscriptions are our labelsWithFeeds + our unlabeled feeds
+		var subscriptions = [].concat(labelsWithFeeds, unlabeled);
 			//sort them by sortid
-			feeds = _(feeds).sortBy(function (feed) {
-				if (orderingId.value.indexOf(feed.sortid) === -1 && !feed.isSpecial) {
+			subscriptions = _(subscriptions).sortBy(function (subscription) {
+				if (orderingId.value.indexOf(subscription.sortid) === -1 && !subscription.isSpecial) {
 					return 1000;
 				}
-				return (orderingId.value.indexOf(feed.sortid)) / 8;
+				return (orderingId.value.indexOf(subscription.sortid)) / 8;
 			});
 
-		return feeds;
+		return subscriptions;
 	};
 
 	//get unread counts from google reader
-	//passing true as the second arg gets you an object, extremely useful for notifications
 	reader.getUnreadCounts = function (successCallback, returnObject) {
+		//passing true for returnObject gets you an object useful for notifications
 		makeRequest({
 			url: BASE_URL + UNREAD_SUFFIX,
 			onSuccess: function (transport) {
@@ -602,13 +603,13 @@
 		});
 	};
 
-	reader.markAllAsRead = function (feedOrLabelId, successCallback) {
+	reader.markAllAsRead = function (subscriptionId, successCallback) {
 		//feed or label
 		makeRequest({
 			method: "POST",
 			url: BASE_URL + MARK_ALL_READ_SUFFIX,
 			parameters: {
-				s: feedOrLabelId
+				s: subscriptionId
 			},
 			onSuccess: function (transport) {
 				successCallback(transport.responseText);
@@ -622,7 +623,7 @@
 
 	// *************************************
 	// *
-	// *	Adding a Feed
+	// *	Adding/Removing Feeds
 	// *
 	// *************************************
 	
@@ -641,6 +642,7 @@
 		}, successCallback);
 	};
 
+	// This function searches Google's feed API to find RSS feeds.
 	var readerUrlRegex = /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?\^=%&amp;:\/~\+#]*[\w\-\@?\^=%&amp;\/~\+#])?/;
 	reader.processFeedInput = function (input, inputType, successCallback, failCallback) {
 		var url = "https://ajax.googleapis.com/ajax/services/feed/";
@@ -648,7 +650,7 @@
 			url += "load";
 		} else {
 			url += "find";
-			//replace the .com, or .net from the input, since our search doesn't like that
+			//remove the TLD from the input, since our search doesn't like that
 			input = input.replace(/\.\w{1,3}\.*\w{0,2}$/ig, "");
 		}
 		makeRequest({
@@ -709,23 +711,22 @@
 	// *
 	// *************************************
 
-	reader.setItemTag = function (feed, item, tag, add, successCallback) {
-		//feed/label id
+	reader.setItemTag = function (subscriptionId, itemId, tag, add, successCallback) {
+		//subscription id
 		//item id
 		//tag in simple form: "like", "read", "share", "label", "star", "kept-unread"
 		//add === true, or add === false
 
 		var params = {
-			s: feed,
-			i: item,
+			s: subscriptionId,
+			i: itemId,
 			async: "true",
-			ac: "edit-tags"
+			ac: "edit-tags",
+			//add the tag if specified or remove it...
+			a: (add) ? reader.TAGS[tag] : undefined,
+			r: (!add) ? reader.TAGS[tag] : undefined
 		};
-		if (add === true) {
-			params.a = reader.TAGS[tag];
-		} else {
-			params.r = reader.TAGS[tag];
-		}
+
 		makeRequest({
 			method: "POST",
 			url: BASE_URL + EDIT_TAG_SUFFIX,
@@ -761,7 +762,9 @@
 
 	//normalizes error response for logging in
 	reader.normalizeError = function (inErrorResponse) {
-		return _(inErrorResponse).lines()[0].replace("Error=", "").replace(/(\w)([A-Z])/g, "$1 $2");
+		var errorMessage = _(inErrorResponse).lines()[0].replace("Error=", "").replace(/(\w)([A-Z])/g, "$1 $2");
+		errorMessage = (errorMessage === "Bad Authentication") ? "Incorrect Email/Password" : errorMessage;
+		return errorMessage;
 	};
 
 }());
