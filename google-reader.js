@@ -183,7 +183,7 @@
 	// *
 	// *************************************
 
-	//returns the whether you are logged in.
+	//returns whether you are logged in.
 	reader.load = function () {
 		reader.is_logged_in = false;
 		reader.is_initialized = true;
@@ -198,7 +198,8 @@
 		return (reader.is_logged_in);
 	};
 
-	//login with the user's provided info
+	//login with the user's provided info.
+	//this saves our auth header to localStorage. This can be reused across sessions.
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
 			failCallback("Blank Info...");
@@ -211,7 +212,8 @@
 				Passwd: password
 			},
 			onSuccess: function (transport) {
-				localStorage.Auth = _(transport.responseText).lines()[2].replace("Auth=", "");
+				//this is what authorizes every action the user takes
+				reader.auth.set((transport.responseText).lines()[2].replace("Auth=", ""));
 				
 				reader.load();
 
@@ -221,6 +223,26 @@
 			onFailure: function (transport) {
 				console.error(transport);
 				failCallback(reader.normalizeError(transport.responseText));
+			}
+		});
+	};
+
+	//Every session you need to request this token. If it fails, your auth header has expired and you need to have the user login again.
+	reader.getToken = function (successCallback, failCallback) {
+		makeRequest({
+			method: "GET",
+			url: BASE_URL + TOKEN_SUFFIX,
+			parameters: {},
+			onSuccess: function (transport) {
+				readerToken = transport.responseText;
+				successCallback();
+				
+			}, 
+			onFailure: function (transport) {
+				console.error("failed", transport);
+				if (failCallback) {
+					failCallback(reader.normalizeError(transport.responseText));
+				}
 			}
 		});
 	};
@@ -283,25 +305,6 @@
 		});		
 	};
 
-	//Get the token
-	reader.getToken = function (successCallback, failCallback) {
-		makeRequest({
-			method: "GET",
-			url: BASE_URL + TOKEN_SUFFIX,
-			parameters: {},
-			onSuccess: function (transport) {
-				readerToken = transport.responseText;
-				successCallback();
-				
-			}, 
-			onFailure: function (transport) {
-				console.error("failed", transport);
-				if (failCallback) {
-					failCallback(reader.normalizeError(transport.responseText));
-				}
-			}
-		});
-	};
 
 	// *************************************
 	// *
