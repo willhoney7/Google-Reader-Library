@@ -213,7 +213,7 @@
 			},
 			onSuccess: function (transport) {
 				//this is what authorizes every action the user takes
-				reader.auth.set((transport.responseText).lines()[2].replace("Auth=", ""));
+				reader.auth.set(_(transport.responseText).lines()[2].replace("Auth=", ""));
 				
 				reader.load();
 
