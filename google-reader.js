@@ -8,7 +8,7 @@
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-	v0.11.0
+	v1.0 - working
 
 	This library requires the underscore library found at http://documentcloud.github.com/underscore/ 
 	This library requires the underscore string library found at http://edtsech.github.com/underscore.string/
@@ -43,8 +43,6 @@
 		"reading-list": "user/-/state/com.google/reading-list"
 	};
 	//global variables
-	reader.is_logged_in = false;
-	reader.is_initialized = false;
 	reader.has_loaded_prefs = false;
 
 	//constants that will only be used in this file 
@@ -80,8 +78,8 @@
 		return _(reader.getFeeds()).select(function (feed) { return feed.isLabel; });
 	};
 
-	reader.user = new localStorageWrapper("User");
-	reader.auth = new localStorageWrapper("Auth");
+	var readerUser = new localStorageWrapper("User"),
+		readerAuth = new localStorageWrapper("Auth");
 
 	//the core ajax function, you won't need to use this directly
 	var readerToken = "",
@@ -128,9 +126,9 @@
 			//set request header
 			request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 
-			if (reader.auth.get() && !noAuth) {
+			if (readerAuth.get() && !noAuth) {
 				//this one is important. This is how google does authorization.
-				request.setRequestHeader("Authorization", "GoogleLogin auth=" + reader.auth.get());
+				request.setRequestHeader("Authorization", "GoogleLogin auth=" + readerAuth.get());
 			}
 
 			var requestIndex = requests.length;
@@ -183,22 +181,16 @@
 	// *
 	// *************************************
 
-	//returns whether you have the auth header (ie are logged in)
-	reader.load = function () {
-		reader.is_logged_in = false;
-		reader.is_initialized = true;
-		
-		if (reader.auth.get()) {
-			reader.is_logged_in = true;			
+	//your first order of business will be to check for the auth header.
+	//if it does you should check for the token
+	//if it does not, you should prompt the user for their login credentials
+	reader.hasAuth: function(){
+		if(readerAuth.get()){
+			return true;
 		}
-		//check storage for the tokens we need.
-		/*if (localStorage.Auth && localStorage.Auth !== "undefined") {
-			reader.setAuth(localStorage.Auth);
-		} */
-		return (reader.is_logged_in);
 	};
 
-	//if no auth header...login with the user's provided info.
+	//login with the user's provided info.
 	//this saves our auth header to localStorage. This can be reused across sessions.
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
@@ -213,7 +205,7 @@
 			},
 			onSuccess: function (transport) {
 				//this is what authorizes every action the user takes
-				reader.auth.set(_(transport.responseText).lines()[2].replace("Auth=", ""));
+				readerAuth.set(_(transport.responseText).lines()[2].replace("Auth=", ""));
 				
 				reader.load();
 
@@ -250,11 +242,10 @@
 
 	//logout the user
 	reader.logout = function () {
-		reader.is_logged_in = false;
 		
 		//delete localStorage.Auth;
-		reader.auth.del();
-		reader.user.del();
+		readerAuth.del();
+		readerUser.del();
 
 		//delete localStorage.User;
 		//reader.setUser({});
@@ -269,7 +260,7 @@
 			url: BASE_URL + USERINFO_SUFFIX,
 			parameters: {},
 			onSuccess: function (transport) {
-				reader.user.set(JSON.parse(transport.responseText));
+				readerUser.set(JSON.parse(transport.responseText));
 				//reader.setUser(JSON.parse(transport.responseText));
 
 				successCallback();
@@ -291,7 +282,7 @@
 			parameters: {},
 			onSuccess: function (transport) {
 				reader.has_loaded_prefs = true;
-				reader.userPrefs = JSON.parse(transport.responseText).streamprefs;
+				readerUserPrefs = JSON.parse(transport.responseText).streamprefs;
 				if (successCallback) {
 					successCallback();				
 				}
@@ -332,7 +323,7 @@
 									JSON.parse(transport.responseText).subscriptions, 
 									labels, 
 									unreadcounts,
-									reader.userPrefs
+									readerUserPrefs
 								)
 							);
 
