@@ -29,6 +29,9 @@
 (function () {
 	"use strict";
 
+	//we need the underscore string lib
+	_.mixin(_.string.exports());
+
 	window.reader = {};
 	
 	//global constants that will likely be used outside of this file
@@ -164,6 +167,8 @@
 						//Humane is a notification lib. 
 						if (humane) {
 							humane(request.statusText + ". " + "Try logging in again.");
+						} else {
+							console.error("AUTH EXPIRED? TRY LOGGING IN AGAIN");
 						}
 					}
 
@@ -184,7 +189,7 @@
 	//your first order of business will be to check for the auth header.
 	//if it does you should check for the token
 	//if it does not, you should prompt the user for their login credentials
-	reader.hasAuth: function(){
+	reader.hasAuth = function(){
 		if(readerAuth.get()){
 			return true;
 		}
@@ -195,6 +200,7 @@
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
 			failCallback("Blank Info...");
+			return;
 		}
 		makeRequest({
 			method: "GET",
@@ -205,11 +211,11 @@
 			},
 			onSuccess: function (transport) {
 				//this is what authorizes every action the user takes
-				readerAuth.set(_(transport.responseText).lines()[2].replace("Auth=", ""));
+				readerAuth.set(_.lines(transport.responseText)[2].replace("Auth=", ""));
 				
-				reader.load();
+				//reader.load();
 
-				reader.getUserInfo(successCallback);
+				reader.getUserInfo(successCallback, failCallback);
 	
 			},
 			onFailure: function (transport) {
@@ -282,7 +288,7 @@
 			parameters: {},
 			onSuccess: function (transport) {
 				reader.has_loaded_prefs = true;
-				readerUserPrefs = JSON.parse(transport.responseText).streamprefs;
+				reader.userPrefs = JSON.parse(transport.responseText).streamprefs;
 				if (successCallback) {
 					successCallback();				
 				}
@@ -323,7 +329,7 @@
 									JSON.parse(transport.responseText).subscriptions, 
 									labels, 
 									unreadcounts,
-									readerUserPrefs
+									reader.userPrefs
 								)
 							);
 
@@ -748,6 +754,19 @@
 	var readerIdRegExp = /user\/\d*\//;
 	reader.correctId = function (id) {
 		return id.replace(readerIdRegExp, "user\/-\/");
+	};
+
+	reader.isRead = function (article) {
+		if(article.read !== undefined){
+			return article.read;
+		}
+		for (var i = 0; i < article.categories.length; i++) {
+			if(reader.correctId(article.categories[i]) === reader.TAGS['read']){
+				return true;
+			}
+		};
+		
+		return false;
 	};
 	
 	//returns url for image to use in the icon
