@@ -368,13 +368,14 @@
 	};
 
 	//organizes feeds based on labels.
-	var organizeFeeds = function (feeds, labels, unreadCounts, userPrefs) {
-		var unlabeled = [];
+	var organizeFeeds = function (feeds, inLabels, unreadCounts, userPrefs) {
+		var unlabeled = [], 
+			labels = _(inLabels).reject(function(label){
+				return reader.correctId(label.id) === "user/-/state/com.google/broadcast" || reader.correctId(label.id) === "user/-/state/com.blogger/blogger-following";
+			});
 
-		//prepare labels
 		labels.unshift({title: "All", id: reader.TAGS["reading-list"], feeds: feeds, isAll: true, isSpecial: true});
-		labels.pop(); //remove "user/-/state/com.blogger/blogger-following". not exactly future friendly *shrug*
-		
+
 		var labelTitleRegExp = /[^\/]+$/i;
 		_(labels).each(function (label) {
 			
@@ -383,9 +384,6 @@
 			//based on title add unique properties
 			if (label.title === "starred") {
 				label.title = _(label.title).capitalize();
-				label.isSpecial = true;
-			} else if (label.title === "broadcast") {
-				label.title = "Shared";
 				label.isSpecial = true;
 			} else if (!label.isSpecial) {
 				label.isLabel = true;
