@@ -761,7 +761,8 @@
 
 	reader.isRead = function (article) {
 		if(article.read !== undefined){
-			return article.read;
+			return (/^true$/i).test(article.read);
+
 		}
 		for (var i = 0; i < article.categories.length; i++) {
 			if(reader.correctId(article.categories[i]) === reader.TAGS['read']){
@@ -774,7 +775,7 @@
 
 	reader.isStarred = function (article) {
 		if(article.starred !== undefined){
-			return article.read;
+			return (/^true$/i).test(article.starred);
 		}
 		for (var i = 0; i < article.categories.length; i++) {
 			if(reader.correctId(article.categories[i]) === reader.TAGS['star']){
