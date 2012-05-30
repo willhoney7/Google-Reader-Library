@@ -128,6 +128,7 @@
 
 			//set request header
 			request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+			request.setRequestHeader('Cookie', '');
 
 			if (readerAuth.get() && !noAuth) {
 				//this one is important. This is how google does authorization.
@@ -522,19 +523,20 @@
 	};
 
 	//this is a function so we can reduce the amount of ajax calls when setting an article as read. Just manually decrement the counts, don't request new numbers.
-	reader.decrementUnreadCount = function (feedId, callback) {
+	reader.decrementUnreadCount = function (feedId, amount, callback) {
 		_.each(reader.getFeeds(), function (subscription) {
 			if (subscription.id === feedId || (subscription.isAll)) {
-				subscription.count -= 1;
+				subscription.count -= amount || 1;
 			} else if (subscription.feeds && subscription.feeds.length > 0) {
 				_.each(subscription.feeds, function (feed) {
 					if (feed.id === feedId) {
-						subscription.count -= 1;
+						subscription.count -= amount || 1;
 					}
 				});
 			}
 		});
-		callback();
+		if(callback)
+			callback();
 	};
 
 	// *************************************
@@ -685,7 +687,7 @@
 
 	reader.getItems = function (feedUrl, successCallback, opts) {
 		var params = opts || {n: 50};
-			params.r = "d";
+			params.r = params.r || "d";
 			
 		makeRequest({
 			method: "GET",
@@ -720,11 +722,14 @@
 			s: subscriptionId,
 			i: itemId,
 			async: "true",
-			ac: "edit-tags",
-			//add the tag if specified or remove it...
-			a: (add) ? reader.TAGS[tag] : undefined,
-			r: (!add) ? reader.TAGS[tag] : undefined
+			ac: "edit-tags"
 		};
+
+		if (add === true) {	
+			params.a = reader.TAGS[tag];			
+		} else 	{			
+			params.r = reader.TAGS[tag];			
+		}
 
 		makeRequest({
 			method: "POST",
@@ -760,6 +765,19 @@
 		}
 		for (var i = 0; i < article.categories.length; i++) {
 			if(reader.correctId(article.categories[i]) === reader.TAGS['read']){
+				return true;
+			}
+		};
+		
+		return false;
+	};
+
+	reader.isStarred = function (article) {
+		if(article.starred !== undefined){
+			return article.read;
+		}
+		for (var i = 0; i < article.categories.length; i++) {
+			if(reader.correctId(article.categories[i]) === reader.TAGS['star']){
 				return true;
 			}
 		};
