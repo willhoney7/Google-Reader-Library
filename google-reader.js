@@ -57,7 +57,6 @@
 		PREFERENCES_PATH = "preference/stream/list",
 		STREAM_PATH = "stream/contents/",
 		SUBSCRIPTIONS_PATH = "subscription/",
-		LABEL_PATH = "user/-/label/",
 		TAGS_PATH = "tag/",
 		//url actions
 		LIST_SUFFIX = "list",
@@ -112,12 +111,28 @@
 				key, 
 				queryString;
 
-			for (key in obj.parameters) {
-				if (obj.parameters.hasOwnProperty(key)) {
-					queries.push(encodeURIComponent(key) + "=" + encodeURIComponent(obj.parameters[key]));				
+			function getQueries(objectToSearch){
+				for (key in objectToSearch) {
+					if (objectToSearch.hasOwnProperty(key)) {
+						//console.log("key", key);
+						if(key === "set"){
+							//for some requests, you can send the same keys sequentially ex: ?i=2&s=dog&i=4&s=cat ...
+							//we support this, but you have to pass the keys that get listed multiple times as a set array of objects.
+							//set: [{i: 2, s: "dog"}, {i: 4, s: "cat"}];
+							_.each(objectToSearch[key], function(singleSet){
+								getQueries(singleSet);
+							});
+						} else {
+							queries.push(encodeURIComponent(key) + "=" + encodeURIComponent(objectToSearch[key]));				
+						}
+					}
 				}
 			}
+
+			getQueries(obj.parameters);
+			
 			queryString = queries.join("&");
+
 			
 			//for get requests, attach the queryString
 			//for post requests, attach just the client constant
@@ -167,7 +182,7 @@
 					if (request.status === 401 && request.statusText === "Unauthorized") {
 						//Humane is a notification lib. 
 						if (humane) {
-							humane(request.statusText + ". " + "Try logging in again.");
+							humane.log(request.statusText + ". " + "Try logging in again.",  {timeout: 2000, clickToClose: false});
 						} else {
 							console.error("AUTH EXPIRED? TRY LOGGING IN AGAIN");
 						}
@@ -179,6 +194,8 @@
 
 			request.send((obj.method === "POST") ? queryString : "");
 			requests.push(request);
+
+			
 		};
 
 	// *************************************
@@ -545,7 +562,7 @@
 	// *
 	// *************************************
 
-	var editFeed = function (params, successCallback) {
+	var editFeed = function (params, successCallback, failCallback) {
 		if (!params) {
 			console.error("No params for feed edit");
 			return;
@@ -560,19 +577,23 @@
 			}, 
 			onFailure: function (transport) {
 				console.error(transport);
+				if(failCallback)
+					failCallback(transport);
 			}
 		});
 	};
 
 	//edit feed title
-	reader.editFeedTitle = function (feedId, newTitle, successCallback) {
+	reader.editFeedTitle = function (feedId, newTitle, successCallback, failCallback) {
 		editFeed({
 			ac: "edit",
 			t: newTitle,
 			s: feedId
-		}, successCallback);
+		}, successCallback, failCallback);
 	};
-	reader.editFeedLabel = function (feedId, label, opt, successCallback) {
+	reader.editFeedLabel = function (feedId, label, opt, successCallback, failCallback) {
+		//label needs to have reader.TAGS["label"] prepended.
+		
 		var obj = {
 			ac: "edit",
 			s: feedId
@@ -582,23 +603,27 @@
 		} else {
 			obj.r = label;
 		}
-		editFeed(obj, successCallback);
+		editFeed(obj, successCallback, failCallback);
 	};
 
-	reader.editLabelTitle = function (labelId, newTitle, successCallback) {
+	reader.editLabelTitle = function (labelId, newTitle, successCallback, failCallback) {
+		//label needs to have reader.TAGS["label"] prepended.
+
 		makeRequest({
 			method: "POST",
 			url: BASE_URL + RENAME_LABEL_SUFFIX,
 			parameters: {
-				s: LABEL_PATH + labelId,
+				s: labelId,
 				t: labelId,
-				dest: LABEL_PATH + newTitle
+				dest: reader.TAGS["label"] + newTitle
 			},
 			onSuccess: function (transport) {
 				successCallback(transport.responseText);
 			}, 
 			onFailure: function (transport) {
 				console.error(transport);
+				if (failCallback)
+					failCallback();
 			}
 
 		});
@@ -712,15 +737,16 @@
 	// *
 	// *************************************
 
-	reader.setItemTag = function (subscriptionId, itemId, tag, add, successCallback) {
-		//subscription id
-		//item id
+	reader.setItemTag = function (subscriptionId, itemId, tag, add, successCallback, failCallback) {
+
+		//single sub id or array of sub ids (ex: ["subId1", "subId2", ...])
+		//single item id or array of item ids in corresponding order of sub ids (ex: ["itemId1", "itemId2", ...])
 		//tag in simple form: "like", "read", "share", "label", "star", "kept-unread"
 		//add === true, or add === false
 
+		//WARNING: The API seems to fail when you try and change the tags of more than ~100 items.
+
 		var params = {
-			s: subscriptionId,
-			i: itemId,
 			async: "true",
 			ac: "edit-tags"
 		};
@@ -730,6 +756,17 @@
 		} else 	{			
 			params.r = reader.TAGS[tag];			
 		}
+
+		if(_.isArray(itemId) && _.isArray(subscriptionId)){
+			params.set = [];
+			_.each(itemId, function(singleItemId, index){
+				params.set.push({i: singleItemId, s: subscriptionId[index]});
+			});
+		} else {
+			params.s = subscriptionId;
+			params.i = itemId;
+		}
+
 
 		makeRequest({
 			method: "POST",
@@ -741,7 +778,9 @@
 				}
 			}, 
 			onFailure: function (transport) {
-				console.error(transport);
+				console.error("FAILED", transport);
+				if(failCallback)
+					failCallback();
 			} 
 		});
 	};
@@ -751,7 +790,6 @@
 	// *	Useful Utilities
 	// *
 	// *************************************
-	
 	
 	//this function replaces the number id with a dash. Helpful for comparison
 	var readerIdRegExp = /user\/\d*\//;
