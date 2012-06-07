@@ -72,7 +72,7 @@
 		readerAuth = new localStorageWrapper("Auth"), //no interface outside of this file
 		readerUser = new localStorageWrapper("User"); //can get from outside of file 
 
-	reader.setFeeds = ;function (feeds) {
+	reader.setFeeds = function (feeds) {
 		readerFeeds = feeds;	
 	};
 	reader.getFeeds = function () {
