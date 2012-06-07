@@ -68,9 +68,11 @@
 		RENAME_LABEL_SUFFIX = "rename-tag",
 		EDIT_TAG_SUFFIX = "edit-tag";
 
-	//managing the feeds
-	var readerFeeds = [];
-	reader.setFeeds =  function (feeds) {
+	var readerFeeds = [], //we want to be able to get/set our feeds outside of this file
+		readerAuth = new localStorageWrapper("Auth"), //no interface outside of this file
+		readerUser = new localStorageWrapper("User"); //can get from outside of file 
+
+	reader.setFeeds = ;function (feeds) {
 		readerFeeds = feeds;	
 	};
 	reader.getFeeds = function () {
@@ -79,9 +81,11 @@
 	reader.getLabels = function () {
 		return _(reader.getFeeds()).select(function (feed) { return feed.isLabel; });
 	};
+	reader.getUser = function () {
+		//readerUser is an object with user info like the user's email address.
+		return readerUser;
+	};
 
-	var readerUser = new localStorageWrapper("User"),
-		readerAuth = new localStorageWrapper("Auth");
 
 	//the core ajax function, you won't need to use this directly
 	var readerToken = "",
@@ -180,15 +184,18 @@
 						}
 					}
 					if (request.status === 401 && request.statusText === "Unauthorized") {
-						//Humane is a notification lib. 
+						//This probably means your Auth expired. The user needs to log in again.
+
+						//Humane is a notification lib. (yes this is bad practice, but easier than checking for this on every fail callback) 
 						if (humane) {
-							humane.log(request.statusText + ". " + "Try logging in again.",  {timeout: 2000, clickToClose: false});
+							var newHumane = humane.create();
+							newHumane.log(request.statusText + ". " + "Try logging in again.",  {timeout: 2000, clickToClose: false});
 						} else {
 							console.error("AUTH EXPIRED? TRY LOGGING IN AGAIN");
 						}
 					}
 
-					console.error(request);
+					console.error("Request Failed: " + request);
 				}
 			};
 
@@ -204,17 +211,16 @@
 	// *
 	// *************************************
 
-	//your first order of business will be to check for the auth header.
-	//if it does you should check for the token
-	//if it does not, you should prompt the user for their login credentials
+	//First order of business is to check for the Auth Header.
+	//If it exists, call getToken();
+	//If it doesn't, prompt the user for their username/password
 	reader.hasAuth = function(){
 		if(readerAuth.get()){
 			return true;
 		}
 	};
 
-	//login with the user's provided info.
-	//this saves our auth header to localStorage. This can be reused across sessions.
+	//Get our auth header; saved to localStorage.
 	reader.login = function (email, password, successCallback, failCallback) {
 		if (email.length === 0 || password.length === 0) {
 			failCallback("Blank Info...");
@@ -231,9 +237,7 @@
 				//this is what authorizes every action the user takes
 				readerAuth.set(_.lines(transport.responseText)[2].replace("Auth=", ""));
 				
-				//reader.load();
-
-				reader.getUserInfo(successCallback, failCallback);
+				getUserInfo(successCallback, failCallback);
 	
 			},
 			onFailure: function (transport) {
@@ -243,7 +247,7 @@
 		});
 	};
 
-	//Every session you need to request this token after you have the auth header
+	//Gets our token for POST requests; saved to localStorage;.
 	//If it fails, your auth header has expired and you need to have the user login again.
 	reader.getToken = function (successCallback, failCallback) {
 		makeRequest({
@@ -264,28 +268,25 @@
 		});
 	};
 
-	//logout the user
+	//Logout the user
 	reader.logout = function () {
 		
 		//delete localStorage.Auth;
 		readerAuth.del();
-		readerUser.del();
-
 		//delete localStorage.User;
-		//reader.setUser({});
+		readerUser.del();
 
 		reader.setFeeds([]);
 	};
 
-	//get the user info, an object of data
-	reader.getUserInfo = function (successCallback, failCallback) {
+	//Gets the user info, an object of data. Needed for our other requests.
+	var getUserInfo = function (successCallback, failCallback) {
 		makeRequest({
 			method: "GET",
 			url: BASE_URL + USERINFO_SUFFIX,
 			parameters: {},
 			onSuccess: function (transport) {
 				readerUser.set(JSON.parse(transport.responseText));
-				//reader.setUser(JSON.parse(transport.responseText));
 
 				successCallback();
 			},
@@ -339,7 +340,7 @@
 
 					loadLabels(function (labels) {
 						//get unread counts
-						reader.getUnreadCounts(function (unreadcounts) {
+						getUnreadCounts(function (unreadcounts) {
 
 							//organize and save feeds
 							reader.setFeeds(
@@ -513,7 +514,7 @@
 	};
 
 	//get unread counts from google reader
-	reader.getUnreadCounts = function (successCallback, returnObject) {
+	var getUnreadCounts = function (successCallback, returnObject) {
 		//passing true for returnObject gets you an object useful for notifications
 		makeRequest({
 			url: BASE_URL + UNREAD_SUFFIX,
@@ -593,7 +594,7 @@
 	};
 	reader.editFeedLabel = function (feedId, label, opt, successCallback, failCallback) {
 		//label needs to have reader.TAGS["label"] prepended.
-		
+
 		var obj = {
 			ac: "edit",
 			s: feedId
@@ -797,10 +798,10 @@
 		return id.replace(readerIdRegExp, "user\/-\/");
 	};
 
+	var trueRegExp = /^true$/i;
 	reader.isRead = function (article) {
 		if(article.read !== undefined){
-			return (/^true$/i).test(article.read);
-
+			return trueRegExp.test(article.read);
 		}
 		for (var i = 0; i < article.categories.length; i++) {
 			if(reader.correctId(article.categories[i]) === reader.TAGS['read']){
@@ -813,7 +814,7 @@
 
 	reader.isStarred = function (article) {
 		if(article.starred !== undefined){
-			return (/^true$/i).test(article.starred);
+			return trueRegExp.test(article.starred);
 		}
 		for (var i = 0; i < article.categories.length; i++) {
 			if(reader.correctId(article.categories[i]) === reader.TAGS['star']){
