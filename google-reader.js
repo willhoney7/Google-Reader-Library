@@ -540,23 +540,6 @@
 		});
 	};
 
-	//this is a function so we can reduce the amount of ajax calls when setting an article as read. Just manually decrement the counts, don't request new numbers.
-	reader.decrementUnreadCount = function (feedId, amount, callback) {
-		_.each(reader.getFeeds(), function (subscription) {
-			if (subscription.id === feedId || (subscription.isAll)) {
-				subscription.count -= amount || 1;
-			} else if (subscription.feeds && subscription.feeds.length > 0) {
-				_.each(subscription.feeds, function (feed) {
-					if (feed.id === feedId) {
-						subscription.count -= amount || 1;
-					}
-				});
-			}
-		});
-		if(callback)
-			callback();
-	};
-
 	// *************************************
 	// *
 	// *	Editing Feeds
